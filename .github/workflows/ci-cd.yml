@@ -36,19 +36,25 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
 
-    - name: Install JFrog CLI
+    - name: Install and Configure JFrog CLI
       run: |
+        # Install JFrog CLI
         curl -fL https://install-cli.jfrog.io | sh
         jf --version # Verify jf is in PATH and working
 
-    - name: Configure JFrog CLI for Docker
-      run: |
-        # This step logs Docker into your Artifactory Docker registry for pushing images.
-        jf rt docker-config ${{ env.DOCKER_LOCAL_REPO }} \
-          --url=${{ env.JFROG_PLATFORM_URL }} \
-          --user=${{ env.JFROG_USERNAME }} \
-          --access-token=${{ env.JFROG_ACCESS_TOKEN }} \
-          --server-id=${{ env.DOCKER_LOCAL_REPO }} # Use repo name as server ID for clarity
+        # Configure JFrog CLI with your Artifactory server details
+        # This adds a server connection to the JFrog CLI configuration.
+        jf c add main-jfrog-server --url=${{ env.JFROG_PLATFORM_URL }} --user=${{ env.JFROG_USERNAME }} --access-token=${{ env.JFROG_ACCESS_TOKEN }} --overwrite --interactive=false
+
+        # Now, perform Docker login using standard Docker CLI, leveraging the credentials.
+        # Docker needs the full registry path for login.
+        echo "${{ env.JFROG_ACCESS_TOKEN }}" | docker login ${{ env.JFROG_PLATFORM_URL }}/artifactory \
+          --username ${{ env.JFROG_USERNAME }} \
+          --password-stdin
+        
+        # Verify Docker login
+        docker info | grep "Registry"
+
 
     - name: Configure Maven for JFrog Artifactory
       run: |
@@ -107,16 +113,19 @@ jobs:
     - name: Build Docker image
       run: |
         # Build image, pulling base image from JFrog virtual Docker repo as configured in Dockerfile
+        # Docker is already logged in to Artifactory due to previous step.
         docker build -t ${{ env.JFROG_PLATFORM_URL }}/artifactory/${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
 
     - name: Publish Docker image to JFrog Artifactory
       run: |
-        # Use jf for docker-push command
+        # Use jf rt docker-push for pushing, as this command is listed under 'rt'
+        # and is specifically for pushing to Artifactory repositories.
         jf rt docker-push ${{ env.JFROG_PLATFORM_URL }}/artifactory/${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.DOCKER_LOCAL_REPO }}
 
     - name: Trigger JFrog XRay Scan
       # XRay scan will always be triggered now
       run: |
+        # Use jf rt curl for XRay API interaction, as 'curl' is listed under 'rt'
         jf rt curl -XPOST "/xray/api/v1/scan/artifact" -H "Content-Type: application/json" -d '{
           "repo_path": "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}",
           "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"] # Ensure this secret is still configured if you use watches
@@ -126,9 +135,7 @@ jobs:
     - name: Get XRay Scan Data
       # XRay scan data will always be attempted to be fetched now (for push events)
       run: |
-        # This is a simplified approach. In a real pipeline, you'd poll XRay until the scan is complete.
-        # For demonstration, we'll try to fetch immediately.
-        # Ensure you have a watch applied to your Docker repository in XRay for this to work.
+        # Use jf rt curl for XRay API interaction
         jf rt curl -XGET "/xray/api/v1/scan/graph/scanResults?path=${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}" -o xray_scan_data.json
       continue-on-error: true # Allow pipeline to continue even if scan data fetch fails initially
 
