@@ -75,12 +75,16 @@ To obtain and run the built Docker image from your JFrog Artifactory:
 
 ## **XRay Scan Data Export**
 
-If XRay scanning is enabled in the pipeline (`JFROG_XRAY_ENABLED` set to `true`), the `xray_scan_data.json` file, containing the XRay scan results for the built Docker image, will be available as an artifact in your GitHub Actions workflow run.
+## XRay Scan Data Export
 
-To retrieve it:
+The `xray_scan_data.json` file, containing the XRay scan results for the built Docker image, will be available as an artifact in your GitHub Actions workflow run.
+
+**Additionally, a manually obtained XRay Scan Report is available as a JSON file directly in the repository under the `/scans/` folder.**
+
+To retrieve it from the pipeline artifacts:
 1.  Go to your GitHub repository -> `Actions` tab.
 2.  Click on the latest successful workflow run.
 3.  Scroll down to the "Artifacts" section.
 4.  Download the `xray-scan-data` artifact. This ZIP file will contain `xray_scan_data.json`.
 
-**Note:** Due to the asynchronous nature of XRay scans, the direct export in the pipeline might not always capture the *final* results immediately. For comprehensive analysis, always refer to the JFrog XRay UI.
+**Note:** Due to the asynchronous nature of XRay scans and potential API timing issues (as experienced during development), the `xray_scan_data.json` artifact downloaded from the pipeline might sometimes still contain a `404 Not Found` error, even if the scan completed and is visible in the JFrog UI. For comprehensive and definitive scan results, always refer directly to the XRay tab for your artifact in the JFrog Platform UI.
