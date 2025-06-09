@@ -17,7 +17,7 @@ env:
   # Your JFrog Repository Names (ensure these match your JFrog setup)
   MAVEN_VIRTUAL_REPO: maven-virtual
   DOCKER_LOCAL_REPO: docker-hub-local # This is where your final image will be pushed
-  DOCKER_VIRTUAL_REPO: docker-hub-virtual # Your virtual repo name, though we're bypassing for base image pull
+  DOCKER_VIRTUAL_REPO: docker-hub-virtual # Your virtual repo name (bypassed for base image pull)
   IMAGE_NAME: spring-petclinic
   IMAGE_TAG: ${{ github.sha }}
 
@@ -36,29 +36,23 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
 
-    - name: Install JFrog CLI & Configure Docker Login
+    - name: Install JFrog CLI & Configure JFrog CLI Server
       run: |
         # Install JFrog CLI (version 2.x, which uses 'jf')
         curl -fL https://install-cli.jfrog.io | sh
         jf --version # Verify 'jf' is in PATH and working
-
-        # Clear any potentially cached Docker credentials from previous runs or default configurations.
-        # This creates an empty config.json, ensuring a clean slate for the Artifactory login.
-        echo "{}" > ~/.docker/config.json
 
         # Dynamically set DOCKER_REGISTRY_HOST env variable.
         # This strips "https://" from JFROG_PLATFORM_URL for use in Docker image tags.
         echo "DOCKER_REGISTRY_HOST=$(echo ${{ env.JFROG_PLATFORM_URL }} | sed 's|^https://||')" >> $GITHUB_ENV
 
         # Configure JFrog CLI with your Artifactory server details.
-        # This uses JFROG_PLATFORM_URL (which has https://) as needed by 'jf c add'.
+        # THIS IS THE PRIMARY AUTHENTICATION CONFIGURATION FOR JFROG CLI COMMANDS (like 'jf rt docker-push').
+        # This uses JFROG_PLATFORM_URL (with https://) as needed by 'jf c add'.
         jf c add main-jfrog-server --url=${{ env.JFROG_PLATFORM_URL }} --user=${{ env.JFROG_USERNAME }} --access-token=${{ env.JFROG_ACCESS_TOKEN }} --overwrite --interactive=false
 
-        # Perform Docker login to Artifactory.
-        # Uses DOCKER_REGISTRY_HOST (without https://) as Docker expects it for the registry host in the login command.
-        echo "${{ env.JFROG_ACCESS_TOKEN }}" | docker login ${{ env.DOCKER_REGISTRY_HOST }}/artifactory \
-          --username ${{ env.JFROG_USERNAME }} \
-          --password-stdin
+        # REMOVED: The problematic 'docker login' command.
+        # 'jf rt docker-push' will handle its own authentication using the 'jf c add' configuration.
 
     - name: Configure Maven for JFrog Artifactory
       run: |
@@ -125,7 +119,7 @@ jobs:
     - name: Publish Docker image to JFrog Artifactory
       run: |
         # Use 'jf rt docker-push' to publish the built image to your local Artifactory Docker repository.
-        # Uses DOCKER_REGISTRY_HOST for the image name. JFrog CLI handles the full URL internally based on 'jf c add' config.
+        # This command handles its own authentication using the 'jf c add' configuration from the previous step.
         jf rt docker-push ${{ env.DOCKER_REGISTRY_HOST }}/${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.DOCKER_LOCAL_REPO }}
 
     - name: Trigger JFrog XRay Scan
