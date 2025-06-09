@@ -39,18 +39,12 @@ jobs:
     - name: Install JFrog CLI
       run: |
         curl -fL https://install-cli.jfrog.io | sh
-        jf --version # Verify it's in PATH and working
+        jf --version # Verify jf is in PATH and working
 
-    - name: Configure JFrog CLI for Maven and Docker
+    - name: Configure JFrog CLI for Docker
       run: |
-        # Configure JFrog CLI for Maven
-        jf rt mvnc ${{ env.MAVEN_VIRTUAL_REPO }} \
-          --url=${{ env.JFROG_PLATFORM_URL }} \
-          --user=${{ env.JFROG_USERNAME }} \
-          --access-token=${{ env.JFROG_ACCESS_TOKEN }}
-
-        # Configure JFrog CLI for Docker (for pushing to local repo)
-        jf rt docker-config ${{ env.DOCKER_LOCAL_REPO }} \
+        # This step logs Docker into your Artifactory Docker registry for pushing images.
+        jf docker-config ${{ env.DOCKER_LOCAL_REPO }} \
           --url=${{ env.JFROG_PLATFORM_URL }} \
           --user=${{ env.JFROG_USERNAME }} \
           --access-token=${{ env.JFROG_ACCESS_TOKEN }} \
@@ -58,7 +52,8 @@ jobs:
 
     - name: Configure Maven for JFrog Artifactory
       run: |
-        # Override Maven settings.xml to point to JFrog virtual repo
+        # This step directly configures Maven's settings.xml for dependency resolution
+        # and authentication with your JFrog Artifactory virtual Maven repository.
         mkdir -p ~/.m2
         cat > ~/.m2/settings.xml <<EOF
         <settings>
