@@ -36,6 +36,7 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
 
+
     - name: Install and Configure JFrog CLI
       run: |
         # Install JFrog CLI
@@ -51,9 +52,9 @@ jobs:
         echo "${{ env.JFROG_ACCESS_TOKEN }}" | docker login ${{ env.JFROG_PLATFORM_URL }}/artifactory \
           --username ${{ env.JFROG_USERNAME }} \
           --password-stdin
-        
-        # Verify Docker login
-        docker info | grep "Registry"
+
+        # Removed the 'docker info | grep "Registry"' line as it was causing an unneeded failure.
+        # The "Login Succeeded" message from the previous command is sufficient verification for this step.
 
 
     - name: Configure Maven for JFrog Artifactory
