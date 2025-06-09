@@ -130,13 +130,16 @@ jobs:
           "repo_path": "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}",
           "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"] # Ensure this secret is configured if you use watches
         }'
-        echo "XRay scan triggered. Manually check XRay UI for results or implement polling for automation."
+        echo "XRay scan triggered for ${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}"
+        echo "Waiting for XRay scan to complete (60 seconds delay)..."
+        # ADDED: Delay to give XRay time to process scan results
+        sleep 60 
 
     - name: Get XRay Scan Data
       run: |
-        # Attempts to fetch XRay scan results using 'jf rt curl'.
-        # This step is allowed to fail without stopping the pipeline (continue-on-error: true).
-        jf rt curl -XGET "/xray/api/v1/scan/graph/scanResults?path=${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}" -o xray_scan_data.json
+        # Fetch XRay scan results using 'jf rt curl'.
+        # CORRECTED: 'path' now includes '/manifest.json' as the actual artifact scanned.
+        jf rt curl -XGET "/xray/api/v1/scan/graph/scanResults?path=${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}/manifest.json" -o xray_scan_data.json
       continue-on-error: true
 
     - name: Upload XRay Scan Data as artifact
