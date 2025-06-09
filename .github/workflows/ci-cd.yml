@@ -131,16 +131,30 @@ jobs:
           "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"] # Ensure this secret is configured if you use watches
         }'
         echo "XRay scan triggered for ${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}"
-        echo "Waiting for XRay scan to complete (60 seconds delay)..."
-        # ADDED: Delay to give XRay time to process scan results
-        sleep 60 
+        echo "Waiting for XRay scan to complete (120 seconds delay)..."
+        sleep 120 # Delay to give XRay time to process scan results
 
     - name: Get XRay Scan Data
       run: |
-        # Fetch XRay scan results using 'jf rt curl'.
-        # CORRECTED: 'path' now includes '/manifest.json' as the actual artifact scanned.
-        jf rt curl -XGET "/xray/api/v1/scan/graph/scanResults?path=${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}/manifest.json" -o xray_scan_data.json
-      continue-on-error: true
+        # Ensure 'jq' is installed for URL encoding (usually available on GitHub runners)
+        # If 'jq' is not found, you might need to install it first: 'sudo apt-get update && sudo apt-get install -y jq'
+        
+        # URL-encode the component name (e.g., spring-petclinic:04ae53315511903ae627b29ba572f73399f0eda3)
+        # and the full artifact path.
+        COMP_NAME_ENCODED=$(printf %s "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" | jq -sRr @uri)
+        ARTIFACT_PATH_ENCODED=$(printf %s "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}/manifest.json" | jq -sRr @uri)
+
+        # Construct the full API URL with all query parameters for UI export
+        FULL_XRAY_API_PATH="/ui/api/v1/xray/ui/component/exportComponentDetails?"
+        FULL_XRAY_API_PATH+="prefix=docker"
+        FULL_XRAY_API_PATH+="&comp_name=${COMP_NAME_ENCODED}"
+        FULL_XRAY_API_PATH+="&format=json"
+        FULL_XRAY_API_PATH+="&path=${ARTIFACT_PATH_ENCODED}"
+        FULL_XRAY_API_PATH+="&license=true&operational_risk=true&vulnerabilities=true&violations=true&secrets=true&services=true&applications=true&licenseResolution=true&exclude_unknown=false&include_ignored_violations=true"
+
+        # Execute the curl command to download the XRay JSON data
+        jf rt curl -XGET "${FULL_XRAY_API_PATH}" -o xray_scan_data.json
+      continue-on-error: true # Allow pipeline to proceed even if this specific download fails
 
     - name: Upload XRay Scan Data as artifact
       if: success() && github.event_name == 'push'
