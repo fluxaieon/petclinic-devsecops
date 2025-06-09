@@ -1,4 +1,4 @@
-FROM triald3g81v.jfrog.io/artifactory/docker-virtual/openjdk:17-jdk-slim
+FROM openjdk:17-jdk-slim
 
 WORKDIR /app
 
