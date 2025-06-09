@@ -12,7 +12,7 @@ env:
   JFROG_PLATFORM_URL: ${{ secrets.JFROG_PLATFORM_URL }}
   JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
   JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
-
+  
   # Your JFrog Repository Names (as configured in Phase 1)
   MAVEN_VIRTUAL_REPO: maven-virtual
   DOCKER_LOCAL_REPO: docker-hub-local
@@ -119,17 +119,17 @@ jobs:
         # Use jf for docker-push command
         jf rt docker-push ${{ env.JFROG_PLATFORM_URL }}/artifactory/${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.DOCKER_LOCAL_REPO }}
 
-    - name: Trigger JFrog XRay Scan (Optional - requires XRay license)
-      if: ${{ secrets.JFROG_XRAY_ENABLED == 'true' }}
+    - name: Trigger JFrog XRay Scan
+      # XRay scan will always be triggered now
       run: |
         jf rt curl -XPOST "/xray/api/v1/scan/artifact" -H "Content-Type: application/json" -d '{
           "repo_path": "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}",
-          "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"]
+          "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"] # Ensure this secret is still configured if you use watches
         }'
         echo "XRay scan triggered. Manually check XRay UI for results or implement polling for automation."
 
-    - name: Get XRay Scan Data (if scan was triggered and completed)
-      if: ${{ github.event_name == 'push' && secrets.JFROG_XRAY_ENABLED == 'true' }}
+    - name: Get XRay Scan Data
+      # XRay scan data will always be attempted to be fetched now (for push events)
       run: |
         # This is a simplified approach. In a real pipeline, you'd poll XRay until the scan is complete.
         # For demonstration, we'll try to fetch immediately.
@@ -138,7 +138,8 @@ jobs:
       continue-on-error: true # Allow pipeline to continue even if scan data fetch fails initially
 
     - name: Upload XRay Scan Data as artifact
-      if: success() && github.event_name == 'push' && secrets.JFROG_XRAY_ENABLED == 'true'
+      # This will run if the previous step succeeded and it's a push event
+      if: success() && github.event_name == 'push'
       uses: actions/upload-artifact@v4
       with:
         name: xray-scan-data
