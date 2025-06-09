@@ -9,15 +9,13 @@ on:
       - main
 
 env:
-  # Base URL for JFrog Platform (MUST include https://, e.g., https://your-instance.jfrog.io)
   JFROG_PLATFORM_URL: ${{ secrets.JFROG_PLATFORM_URL }} 
   JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
   JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
   
-  # Your JFrog Repository Names (ensure these match your JFrog setup)
   MAVEN_VIRTUAL_REPO: maven-virtual
-  DOCKER_LOCAL_REPO: docker-hub-local # This is where your final image will be pushed
-  DOCKER_VIRTUAL_REPO: docker-hub-virtual # Your virtual repo name (bypassed for base image pull)
+  DOCKER_LOCAL_REPO: docker-hub-local 
+  DOCKER_VIRTUAL_REPO: docker-hub-virtual 
   IMAGE_NAME: spring-petclinic
   IMAGE_TAG: ${{ github.sha }}
 
@@ -38,27 +36,17 @@ jobs:
 
     - name: Install JFrog CLI & Configure JFrog CLI Server
       run: |
-        # Install JFrog CLI (version 2.x, which uses 'jf')
+        
         curl -fL https://install-cli.jfrog.io | sh
         jf --version # Verify 'jf' is in PATH and working
 
-        # Dynamically set DOCKER_REGISTRY_HOST env variable.
-        # This strips "https://" from JFROG_PLATFORM_URL for use in Docker image tags.
         echo "DOCKER_REGISTRY_HOST=$(echo ${{ env.JFROG_PLATFORM_URL }} | sed 's|^https://||')" >> $GITHUB_ENV
 
-        # Configure JFrog CLI with your Artifactory server details.
-        # THIS IS THE PRIMARY AUTHENTICATION CONFIGURATION FOR JFROG CLI COMMANDS (like 'jf rt docker-push').
-        # This uses JFROG_PLATFORM_URL (with https://) as needed by 'jf c add'.
         jf c add main-jfrog-server --url=${{ env.JFROG_PLATFORM_URL }} --user=${{ env.JFROG_USERNAME }} --access-token=${{ env.JFROG_ACCESS_TOKEN }} --overwrite --interactive=false
 
-        # REMOVED: The problematic 'docker login' command.
-        # 'jf rt docker-push' will handle its own authentication using the 'jf c add' configuration.
 
     - name: Configure Maven for JFrog Artifactory
       run: |
-        # This step directly configures Maven's settings.xml for dependency resolution
-        # and authentication with your JFrog Artifactory virtual Maven repository.
-        # Uses JFROG_PLATFORM_URL (with https://) for the Maven repository URL.
         mkdir -p ~/.m2
         cat > ~/.m2/settings.xml <<EOF
         <settings>
@@ -111,21 +99,13 @@ jobs:
 
     - name: Build Docker image
       run: |
-        # Build Docker image.
-        # Pulls base image (openjdk:17-jdk-slim) directly from Docker Hub (workaround for virtual repo issue).
-        # Tags the final image with the Artifactory registry host (derived without https://) and local repo name.
-        docker build -t ${{ env.DOCKER_REGISTRY_HOST }}/${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
 
     - name: Publish Docker image to JFrog Artifactory
       run: |
-        # Use 'jf rt docker-push' to publish the built image to your local Artifactory Docker repository.
-        # This command handles its own authentication using the 'jf c add' configuration from the previous step.
         jf rt docker-push ${{ env.DOCKER_REGISTRY_HOST }}/${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.DOCKER_LOCAL_REPO }}
 
     - name: Trigger JFrog XRay Scan
       run: |
-        # Triggers an XRay scan on the published Docker image using 'jf rt curl'.
-        # Uses previously configured JFrog CLI server details.
         jf rt curl -XPOST "/xray/api/v1/scan/artifact" -H "Content-Type: application/json" -d '{
           "repo_path": "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}",
           "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"] # Ensure this secret is configured if you use watches
@@ -136,15 +116,9 @@ jobs:
 
     - name: Get XRay Scan Data
       run: |
-        # Ensure 'jq' is installed for URL encoding (usually available on GitHub runners)
-        # If 'jq' is not found, you might need to install it first: 'sudo apt-get update && sudo apt-get install -y jq'
-        
-        # URL-encode the component name (e.g., spring-petclinic:04ae53315511903ae627b29ba572f73399f0eda3)
-        # and the full artifact path.
         COMP_NAME_ENCODED=$(printf %s "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" | jq -sRr @uri)
         ARTIFACT_PATH_ENCODED=$(printf %s "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}/manifest.json" | jq -sRr @uri)
 
-        # Construct the full API URL with all query parameters for UI export
         FULL_XRAY_API_PATH="/ui/api/v1/xray/ui/component/exportComponentDetails?"
         FULL_XRAY_API_PATH+="prefix=docker"
         FULL_XRAY_API_PATH+="&comp_name=${COMP_NAME_ENCODED}"
@@ -152,7 +126,6 @@ jobs:
         FULL_XRAY_API_PATH+="&path=${ARTIFACT_PATH_ENCODED}"
         FULL_XRAY_API_PATH+="&license=true&operational_risk=true&vulnerabilities=true&violations=true&secrets=true&services=true&applications=true&licenseResolution=true&exclude_unknown=false&include_ignored_violations=true"
 
-        # Execute the curl command to download the XRay JSON data
         jf rt curl -XGET "${FULL_XRAY_API_PATH}" -o xray_scan_data.json
       continue-on-error: true # Allow pipeline to proceed even if this specific download fails
 
