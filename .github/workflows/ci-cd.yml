@@ -44,7 +44,7 @@ jobs:
     - name: Configure JFrog CLI for Docker
       run: |
         # This step logs Docker into your Artifactory Docker registry for pushing images.
-        jf docker-config ${{ env.DOCKER_LOCAL_REPO }} \
+        jf rt docker-config ${{ env.DOCKER_LOCAL_REPO }} \
           --url=${{ env.JFROG_PLATFORM_URL }} \
           --user=${{ env.JFROG_USERNAME }} \
           --access-token=${{ env.JFROG_ACCESS_TOKEN }} \
