@@ -9,12 +9,12 @@ on:
       - main
 
 env:
-  JFROG_PLATFORM_URL: ${{ secrets.JFROG_PLATFORM_URL }} 
+  JFROG_PLATFORM_URL: ${{ secrets.JFROG_PLATFORM_URL }}
   JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
   JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
-  
+
   MAVEN_VIRTUAL_REPO: maven-virtual
-  DOCKER_LOCAL_REPO: docker-hub-local 
+  DOCKER_LOCAL_REPO: docker-hub-local
   DOCKER_VIRTUAL_REPO: docker-hub-virtual 
   IMAGE_NAME: spring-petclinic
   IMAGE_TAG: ${{ github.sha }}
@@ -34,16 +34,14 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
 
-    - name: Install JFrog CLI & Configure JFrog CLI Server
+    - name: Install JFrog CLI & Configure Server
       run: |
-        
         curl -fL https://install-cli.jfrog.io | sh
-        jf --version # Verify 'jf' is in PATH and working
+        jf --version
 
         echo "DOCKER_REGISTRY_HOST=$(echo ${{ env.JFROG_PLATFORM_URL }} | sed 's|^https://||')" >> $GITHUB_ENV
 
         jf c add main-jfrog-server --url=${{ env.JFROG_PLATFORM_URL }} --user=${{ env.JFROG_USERNAME }} --access-token=${{ env.JFROG_ACCESS_TOKEN }} --overwrite --interactive=false
-
 
     - name: Configure Maven for JFrog Artifactory
       run: |
@@ -99,6 +97,7 @@ jobs:
 
     - name: Build Docker image
       run: |
+        docker build -t ${{ env.DOCKER_REGISTRY_HOST }}/${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
 
     - name: Publish Docker image to JFrog Artifactory
       run: |
@@ -108,14 +107,16 @@ jobs:
       run: |
         jf rt curl -XPOST "/xray/api/v1/scan/artifact" -H "Content-Type: application/json" -d '{
           "repo_path": "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}",
-          "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"] # Ensure this secret is configured if you use watches
+          "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"]
         }'
         echo "XRay scan triggered for ${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}"
-        echo "Waiting for XRay scan to complete (120 seconds delay)..."
-        sleep 120 # Delay to give XRay time to process scan results
+        sleep 120 # Delay for XRay processing
 
     - name: Get XRay Scan Data
       run: |
+        # Install 'jq' for URL encoding if not present
+        sudo apt-get update && sudo apt-get install -y jq || true
+        
         COMP_NAME_ENCODED=$(printf %s "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" | jq -sRr @uri)
         ARTIFACT_PATH_ENCODED=$(printf %s "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}/manifest.json" | jq -sRr @uri)
 
@@ -127,7 +128,7 @@ jobs:
         FULL_XRAY_API_PATH+="&license=true&operational_risk=true&vulnerabilities=true&violations=true&secrets=true&services=true&applications=true&licenseResolution=true&exclude_unknown=false&include_ignored_violations=true"
 
         jf rt curl -XGET "${FULL_XRAY_API_PATH}" -o xray_scan_data.json
-      continue-on-error: true # Allow pipeline to proceed even if this specific download fails
+      continue-on-error: true
 
     - name: Upload XRay Scan Data as artifact
       if: success() && github.event_name == 'push'
