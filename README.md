@@ -8,7 +8,7 @@ This repository contains the Spring PetClinic application, enhanced with a GitHu
 4.  **Image Publishing to JFrog Artifactory:** Pushes the built Docker image to a specified JFrog Artifactory repository.
 5.  **Dependency Resolution from JFrog Artifactory:** All Maven dependencies are resolved through a JFrog Artifactory virtual repository (`maven-virtual`) which proxies Maven Central.
 6.  **Base Image Resolution from JFrog Artifactory:** The Docker base image (`openjdk:17-jdk-slim`) is pulled through a JFrog Artifactory virtual Docker repository (`docker-virtual`) which proxies Docker Hub.
-7.  **XRay Scan (Optional):** Triggers a security scan of the Docker image using JFrog XRay (if enabled and configured).
+7.  **XRay Scan : Triggers a security scan of the Docker image using JFrog XRay.
 
 ## **Project Structure**
 
@@ -16,6 +16,7 @@ This repository contains the Spring PetClinic application, enhanced with a GitHu
 * `pom.xml`: Maven project object model.
 * `Dockerfile`: Defines how to build the Docker image for the application.
 * `.github/workflows/ci-cd.yml`: The GitHub Actions workflow definition.
+* XRAY Scan Data: JSON file under the `/scans`directory
 
 ## **Pipeline Details**
 
@@ -32,8 +33,8 @@ The pipeline is triggered on `push` and `pull_request` events to the `main` bran
 * **Package the project (JAR):** Creates the runnable JAR file using `mvn package -DskipTests`.
 * **Build Docker image:** Constructs the Docker image based on the `Dockerfile`. The base image is pulled via your JFrog Artifactory virtual Docker repository (`docker-virtual`).
 * **Publish Docker image to JFrog Artifactory:** Pushes the newly built Docker image to your specified JFrog Artifactory local Docker repository (`docker-hub-local`).
-* **Trigger JFrog XRay Scan (Optional):** Initiates an XRay scan on the published Docker image.
-* **Get XRay Scan Data (Optional):** Attempts to retrieve the XRay scan results and save them as an artifact.
+* **Trigger JFrog XRay Scan : Initiates an XRay scan on the published Docker image.
+* **Get XRay Scan Data : Attempts to retrieve the XRay scan results and save them as an artifact.
 
 ## **JFrog Configuration Assumed**
 
