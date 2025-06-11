@@ -15,7 +15,7 @@ env:
 
   MAVEN_VIRTUAL_REPO: maven-virtual
   DOCKER_LOCAL_REPO: docker-hub-local
-  DOCKER_VIRTUAL_REPO: docker-hub-virtual 
+  DOCKER_VIRTUAL_REPO: docker-hub-virtual
   IMAGE_NAME: spring-petclinic
   IMAGE_TAG: ${{ github.sha }}
 
@@ -106,28 +106,29 @@ jobs:
     - name: Trigger JFrog XRay Scan
       run: |
         jf rt curl -XPOST "/xray/api/v1/scan/artifact" -H "Content-Type: application/json" -d '{
-          "repo_path": "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}",
+          "repo_path": "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}/manifest.json", # Ensure this exact path is scanned
           "watches": ["${{ secrets.YOUR_XRAY_WATCH_NAME }}"]
         }'
         echo "XRay scan triggered for ${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}"
         sleep 120 # Delay for XRay processing
 
-    - name: Get XRay Scan Data
+    - name: Get XRay Scan Data (using Export API)
       run: |
-        # Install 'jq' for URL encoding if not present
-        sudo apt-get update && sudo apt-get install -y jq || true
-        
-        COMP_NAME_ENCODED=$(printf %s "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" | jq -sRr @uri)
-        ARTIFACT_PATH_ENCODED=$(printf %s "${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}/manifest.json" | jq -sRr @uri)
+        # Construct the artifact ID (repo_path)
+        ARTIFACT_ID="${{ env.DOCKER_LOCAL_REPO }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_TAG }}/manifest.json"
 
-        FULL_XRAY_API_PATH="/ui/api/v1/xray/ui/component/exportComponentDetails?"
-        FULL_XRAY_API_PATH+="prefix=docker"
-        FULL_XRAY_API_PATH+="&comp_name=${COMP_NAME_ENCODED}"
-        FULL_XRAY_API_PATH+="&format=json"
-        FULL_XRAY_API_PATH+="&path=${ARTIFACT_PATH_ENCODED}"
-        FULL_XRAY_API_PATH+="&license=true&operational_risk=true&vulnerabilities=true&violations=true&secrets=true&services=true&applications=true&licenseResolution=true&exclude_unknown=false&include_ignored_violations=true"
+        # Construct the JSON payload for the export API
+        EXPORT_PAYLOAD=$(jq -n \
+            --arg id "$ARTIFACT_ID" \
+            '{artifact_id: $id, include_licenses: true, include_vulnerabilities: true, include_security_violations: true, include_policy_violations: true, output_format: "json"}'
+        )
 
-        jf rt curl -XGET "${FULL_XRAY_API_PATH}" -o xray_scan_data.json
+        # Execute the curl command to download the XRay JSON data
+        # Note: This API takes a POST request with a JSON body
+        jf rt curl -XPOST "/xray/api/v1/export/artifact" \
+           -H "Content-Type: application/json" \
+           -d "$EXPORT_PAYLOAD" \
+           -o xray_scan_data.json
       continue-on-error: true
 
     - name: Upload XRay Scan Data as artifact
